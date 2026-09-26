@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>IoT Dashboard - Sensor ESP32</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #10151c;
+    color: #e8ecf1;
+    margin: 0;
+    padding: 32px;
+  }
+  h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 4px; }
+  p.subtitle { color: #8b96a5; margin-top: 0; margin-bottom: 24px; }
+  .cards { display: flex; gap: 16px; margin-bottom: 24px; }
+  .card {
+    background: #1a212b;
+    border: 1px solid #2a3441;
+    border-radius: 12px;
+    padding: 20px 24px;
+    flex: 1;
+  }
+  .card .label { color: #8b96a5; font-size: 0.85rem; }
+  .card .value { font-size: 2rem; font-weight: 700; margin-top: 4px; }
+  .temp .value { color: #ff9f6e; }
+  .hum .value { color: #6ec8ff; }
+  .chart-wrap {
+    background: #1a212b;
+    border: 1px solid #2a3441;
+    border-radius: 12px;
+    padding: 20px;
+  }
+  #status { font-size: 0.8rem; color: #8b96a5; margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Dashboard IoT — ESP32</h1>
+<p class="subtitle">Real-time temperature readings <time datetime=""></time></p>
+
+<div class="cards">
+  <div class="card temp">
+    <div class="label">Current temperature</div>
+    <div class="value" id="tempValue">-- °C</div>
+  </div>
+  <div class="card hum">
+    <div class="label">Current humidity</div>
+    <div class="value" id="humValue">-- %</div>
+  </div>
+</div>
+
+<div class="chart-wrap">
+  <canvas id="readingsChart" height="90"></canvas>
+</div>
+<div id="status">Connecting to the backend...</div>
+
+<script>
+const API_URL = "http://127.0.0.1:8000/readings/?limit=30";
+const POLL_INTERVAL_MS = 3000;
+
+const ctx = document.getElementById('readingsChart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Temperature (°C)',
+        data: [],
+        borderColor: '#ff9f6e',
+        backgroundColor: 'rgba(255,159,110,0.1)',
+        tension: 0.3,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Humidity (%)',
+        data: [],
+        borderColor: '#6ec8ff',
+        backgroundColor: 'rgba(110,200,255,0.1)',
+        tension: 0.3,
+        yAxisID: 'y1',
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      y: { type: 'linear', position: 'left', title: { display: true, text: '°C' } },
+      y1: { type: 'linear', position: 'right', title: { display: true, text: '%' }, grid: { drawOnChartArea: false } },
+    },
+    plugins: { legend: { labels: { color: '#e8ecf1' } } },
+  },
+});
+
+async function fetchReadings() {
+  try {
+    const res = await fetch(API_URL);
+    const data = await res.json();
+    const ordered = [...data].reverse(); 
+
+    chart.data.labels = ordered.map(r => new Date(r.timestamp).toLocaleTimeString());
+    chart.data.datasets[0].data = ordered.map(r => r.temperature);
+    chart.data.datasets[1].data = ordered.map(r => r.humidity);
+    chart.update();
+
+    if (ordered.length > 0) {
+      const last = ordered[ordered.length - 1];
+      document.getElementById('tempValue').textContent = `${last.temperature} °C`;
+      document.getElementById('humValue').textContent = `${last.humidity} %`;
+    }
+
+    document.getElementById('status').textContent =
+      `Atualizado às ${new Date().toLocaleTimeString()} — ${data.length} loaded readings`;
+  } catch (err) {
+    document.getElementById('status').textContent =
+      'Could not connect to the backend (check if uvicorn is running on :8000)';
+  }
+}
+
+fetchReadings();
+setInterval(fetchReadings, POLL_INTERVAL_MS);
+</script>
+
+</body>
+</html>
